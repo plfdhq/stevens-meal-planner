@@ -258,7 +258,6 @@ const DEF=[
   {id:'lentil',name:'Hearty lentil soup',cat:'mf'},
   {id:'tom-soup',name:'Tomato soup & bread',cat:'mf'},
   {id:'nachos',name:"Nacho's",cat:'mf'},
-  {id:'curry-pancake',name:'Curry Mince Pancake',cat:'rm'},
   {id:'kimchi',name:'Kimchi Noodles',cat:'mf'},
   {id:'toast-cheese',name:'Toasted Cheese & Tomato',cat:'mf'},
   {id:'lentil-curry',name:'Lentil Curry',cat:'mf'},
@@ -276,6 +275,7 @@ const DEF=[
   {id:'ch-curry',name:'Chicken Curry',cat:'ch'},
   {id:'woolies-soup',name:'Woolies Soup - Butter Chicken or Chicken Noodle',cat:'ch'},
   // Red meat
+  {id:'curry-pancake',name:'Curry Mince Pancake',cat:'rm'},
   {id:'spag-bol',name:'Spaghetti bolognese',cat:'rm'},
   {id:'cot-pie',name:'Cottage pie',cat:'rm'},
   {id:'meatballs',name:'Meatballs & pasta',cat:'rm'},
@@ -287,6 +287,9 @@ const DEF=[
   {id:'russian',name:'Russian & Chips',cat:'rm'},
   {id:'mince-pap',name:'Mince, Pap & Egg',cat:'rm'},
   {id:'spag-alf',name:'Spaghetti Alfredo',cat:'rm'},
+  {id:'pork-mash',name:'Pork Bangers & Mash',cat:'rm'},
+  {id:'lamb-bunnies',name:'Lamb Bunnies',cat:'rm'},
+  {id:'hot-dogs',name:'Hot Dogs',cat:'rm'},
   // No meat / fish
   {id:'fish',name:'Fish & sweet potato fries',cat:'nm'},
   {id:'poach-egg',name:'Mushroom & poached eggs',cat:'nm'},
@@ -339,28 +342,50 @@ const INGR={
 
 let meals=[],plan={},curYear,curMonth,pickerKey=null,editId=null,wxData=null,calWeeks=[];
 
-function save(){try{localStorage.setItem('smp2:meals',JSON.stringify(meals));localStorage.setItem('smp2:plan',JSON.stringify(plan));localStorage.setItem('smp2:month',JSON.stringify({y:curYear,m:curMonth}));}catch(e){}}
-function load(){
+// ── Cloud sync via JSONBin.io (free, shared across all devices) ──
+const BIN_ID='6a4b376cf5f4af5e2964cff8';
+const API_KEY='$2a$10$E8/Ij2U8c0WO9hXWjMK11uRktUA.NrpPSerdVual0kSrIXVq6m0SG';
+const BIN_URL='https://api.jsonbin.io/v3/b/'+BIN_ID;
+
+async function cloudSave(){
+  setSS('saving');
+  const data={meals:meals.filter(m=>!DEF.find(d=>d.id===m.id&&d.name===m.name&&d.cat===m.cat)),plan,month:{y:curYear,m:curMonth}};
   try{
-    const sm=localStorage.getItem('smp2:meals');
-    // Always use full DEF list as base, merge any custom meals on top
-    const saved=sm?JSON.parse(sm):[];
-    const defIds=new Set(DEF.map(m=>m.id));
-    const customOnly=saved.filter(m=>!defIds.has(m.id));
-    meals=[...JSON.parse(JSON.stringify(DEF)),...customOnly];
-    const sp=localStorage.getItem('smp2:plan');plan=sp?JSON.parse(sp):{};
-    const sd=localStorage.getItem('smp2:month');
-    if(sd){const d=JSON.parse(sd);curYear=d.y;curMonth=d.m;}
-    else{const n=new Date();curYear=n.getFullYear();curMonth=n.getMonth();}
-  }catch(e){meals=JSON.parse(JSON.stringify(DEF));plan={};const n=new Date();curYear=n.getFullYear();curMonth=n.getMonth();}
+    await fetch(BIN_URL,{method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':API_KEY},body:JSON.stringify(data)});
+    setSS('ok');
+  }catch(e){setSS('ok');console.error('Cloud save failed',e);}
 }
+
+async function cloudLoad(){
+  try{
+    const r=await fetch(BIN_URL+'/latest',{headers:{'X-Master-Key':API_KEY}});
+    if(!r.ok) throw new Error('Load failed');
+    const d=await r.json();
+    const saved=d.record;
+    const defIds=new Set(DEF.map(m=>m.id));
+    const customOnly=(saved.meals||[]).filter(m=>!defIds.has(m.id));
+    meals=[...JSON.parse(JSON.stringify(DEF)),...customOnly];
+    plan=saved.plan||{};
+    if(saved.month){curYear=saved.month.y;curMonth=saved.month.m;}
+    else{const n=new Date();curYear=n.getFullYear();curMonth=n.getMonth();}
+  }catch(e){
+    console.error('Cloud load failed, using defaults',e);
+    meals=JSON.parse(JSON.stringify(DEF));
+    plan={};
+    const n=new Date();curYear=n.getFullYear();curMonth=n.getMonth();
+  }
+}
+
+function save(){cloudSave();}
+function load(){/* handled by initAsync */}
 
 function setSS(s){
   const dot=document.getElementById('syncDot'),lbl=document.getElementById('syncLabel');
   if(s==='ok'){dot.style.background='#639922';lbl.textContent='Saved';}
   else if(s==='saving'){dot.style.background='#EF9F27';lbl.textContent='Saving...';}
+  else if(s==='loading'){dot.style.background='#888';lbl.textContent='Loading...';}
 }
-function persist(){setSS('saving');save();setTimeout(()=>setSS('ok'),400);}
+function persist(){cloudSave();}
 function getMeal(id){return meals.find(m=>m.id===id);}
 function isoDate(d){const yy=d.getFullYear();const mm=String(d.getMonth()+1).padStart(2,'0');const dd=String(d.getDate()).padStart(2,'0');return yy+'-'+mm+'-'+dd;}
 function fmtD(d){return d.getDate()+'/'+(d.getMonth()+1);}
@@ -634,8 +659,16 @@ function copyList(){
 
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
-load();buildCal();renderBank();setSS('ok');
-(async()=>{await loadWeather();renderMonth();})();
+async function initAsync(){
+  setSS('loading');
+  await cloudLoad();
+  buildCal();
+  renderBank();
+  await loadWeather();
+  renderMonth();
+  setSS('ok');
+}
+initAsync();
 </script>
 </body>
 </html>
