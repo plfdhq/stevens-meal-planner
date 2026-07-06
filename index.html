@@ -390,7 +390,7 @@ function getMeal(id){return meals.find(m=>m.id===id);}
 function isoDate(d){const yy=d.getFullYear();const mm=String(d.getMonth()+1).padStart(2,'0');const dd=String(d.getDate()).padStart(2,'0');return yy+'-'+mm+'-'+dd;}
 function fmtD(d){return d.getDate()+'/'+(d.getMonth()+1);}
 function isToday(d){const t=new Date();return d.getDate()===t.getDate()&&d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear();}
-function planKey(wi,di){return 'k'+wi+'_'+di;}
+function planKey(wi,di){return 'k'+curYear+'_'+curMonth+'_'+wi+'_'+di;}
 
 function buildCal(){
   calWeeks=[];
@@ -486,12 +486,9 @@ function clearSlot(key){
 
 function clearMonth(){
   if(!confirm('Clear meals for '+MONTHS[curMonth]+' '+curYear+' only?'))return;
-  // Only delete plan keys that belong to the current month's calendar weeks
   calWeeks.forEach((wk,wi)=>{
     wk.forEach((date,di)=>{
-      if(date.getMonth()===curMonth && date.getFullYear()===curYear){
-        delete plan[planKey(wi,di)];
-      }
+      delete plan[planKey(wi,di)];
     });
   });
   persist();
