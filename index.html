@@ -366,8 +366,12 @@ async function cloudLoad(){
     const customOnly=(saved.meals||[]).filter(m=>!defIds.has(m.id));
     meals=[...JSON.parse(JSON.stringify(DEF)),...customOnly];
     plan=saved.plan||{};
-    if(saved.month){curYear=saved.month.y;curMonth=saved.month.m;}
-    else{const n=new Date();curYear=n.getFullYear();curMonth=n.getMonth();}
+    const n=new Date();
+    if(saved.month && typeof saved.month.y==='number' && typeof saved.month.m==='number' && !isNaN(saved.month.y) && !isNaN(saved.month.m)){
+      curYear=saved.month.y;curMonth=saved.month.m;
+    } else {
+      curYear=n.getFullYear();curMonth=n.getMonth();
+    }
   }catch(e){
     console.error('Cloud load failed, using defaults',e);
     meals=JSON.parse(JSON.stringify(DEF));
