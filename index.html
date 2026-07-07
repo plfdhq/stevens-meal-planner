@@ -395,7 +395,7 @@ function isoDate(d){const yy=d.getFullYear();const mm=String(d.getMonth()+1).pad
 function fmtD(d){return d.getDate()+'/'+(d.getMonth()+1);}
 function isToday(d){const t=new Date();return d.getDate()===t.getDate()&&d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear();}
 function planKey(wi,di){
-  // Key by the actual calendar date so cross-month weeks are handled correctly
+  // Key by actual calendar date - format: kYYYY_M_D
   if(calWeeks[wi]&&calWeeks[wi][di]){
     const d=calWeeks[wi][di];
     return 'k'+d.getFullYear()+'_'+d.getMonth()+'_'+d.getDate();
@@ -497,13 +497,17 @@ function clearSlot(key){
 
 function clearMonth(){
   if(!confirm('Clear meals for '+MONTHS[curMonth]+' '+curYear+' only?'))return;
-  calWeeks.forEach((wk,wi)=>{
-    wk.forEach((date,di)=>{
-      // Only clear cells that actually belong to this month and year
-      if(date.getMonth()===curMonth && date.getFullYear()===curYear){
-        delete plan[planKey(wi,di)];
+  // Delete every key in plan that belongs to a date in this month and year
+  Object.keys(plan).forEach(k=>{
+    // Keys are formatted as k_YYYY_M_D
+    const parts=k.replace('k','').split('_');
+    if(parts.length>=3){
+      const ky=parseInt(parts[0]);
+      const km=parseInt(parts[1]);
+      if(ky===curYear && km===curMonth){
+        delete plan[k];
       }
-    });
+    }
   });
   persist();
   renderMonth();
@@ -684,7 +688,16 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 
 async function initAsync(){
   setSS('loading');
+  // Always set a safe default FIRST before cloud load
+  const now=new Date();
+  curYear=now.getFullYear();
+  curMonth=now.getMonth();
   await cloudLoad();
+  // Safety net: if cloud load gave us bad values, reset to today
+  if(!curYear||isNaN(curYear)||!curMonth===undefined||isNaN(curMonth)){
+    curYear=now.getFullYear();
+    curMonth=now.getMonth();
+  }
   buildCal();
   renderBank();
   await loadWeather();
